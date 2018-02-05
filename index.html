@@ -3,9 +3,7 @@
 	<head>
 		<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
 		<title>Journal to Ledgers and trial balance</title>
-		<script src="jszip.js"></script>
-		<script src="xlsx.js"></script>
-		<script src="FileSaver.js"></script>
+		<script defer src="FileSaver.js"></script>
 		<style>
 		#drop {
 			border:2px dashed #bbb;
@@ -18,133 +16,31 @@
 		.hide {
 			display: none;
 		}
+		.u-pad {
+			padding: 16px;
+		}
+		.u-padVertical {
+			padding: 8px 0;
+		}
 		</style>
 	</head>
-	<body>
-		<div id="drop">Drop a spreadsheet file here to see sheet data</div>
+	<body class="u-pad">
+		<div id="drop">Drop the Journal spreadsheet file here</div>
 		<input type="file" name="xlfile" id="xlf" /> ... or click here to select a file
-		<pre id="out" class="hide"></pre>
-		<div>
-			Download ledger for <select id="accounts_list"><option value="" diabled selected>Select</option></select>
+		<div class="hide u-padVertical" id="actions_container">
+			<div class="u-padVertical">
+				Download ledger for <select id="accounts_list"><option value="" diabled selected>Select</option></select>
+			</div>
+			<div class="u-padVertical">
+				<a id="trial_balance" href="#">Download Trial Balance</a>
+			</div>
+			<div class="u-padVertical">
+				<a id="zip_all_ledgers" href="#">Download zip of all ledgers</a>
+			</div>
+			<div class="u-padVertical">
+				<a id="zip_all" href="#">Download zip of all ledgers &amp; Trial balance</a>
+			</div>
 		</div>
-		<div>
-			<a id="trial_balance" href="#">Download Trial Balance</a>
-		</div>
-		<script>
-			let global_wb;
-			let global_accounts_list;
-			let excelParsingWorker;
-			let accountsWorker;
-
-			const XW = {
-				/* worker message */
-				msg: 'xlsx',
-				/* worker scripts */
-				worker: './xlsxworker.js'
-			};
-
-			function add_accounts() {
-				const accountsListSelect = document.getElementById('accounts_list');
-				const optionItems = global_accounts_list.map(account => `<option value="${account}">${account}</option>`
-				);
-				accountsListSelect.innerHTML += optionItems.join('');
-			}
-
-			function show_output() {
-				let OUT = document.getElementById('out');
-				OUT.textContent = JSON.stringify(global_wb, 2, 2);
-			}
-
-			function to_json(workbook) {
-				var result = {};
-				workbook.SheetNames.forEach(function(sheetName) {
-					var roa = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {range:2});
-					if(roa.length) result[sheetName] = roa;
-				});
-				return result;
-			};
-
-			function process_journal(files) {
-				let file = files.length && files[0];
-				const reader = new FileReader();
-				reader.onload = function(e) {
-					const data = e.target.result;
-					excelParsingWorker = new Worker(XW.worker);
-					accountsWorker = new Worker('./accountsworker.js');
-					excelParsingWorker.onmessage = function(e) {
-						switch(e.data.t) {
-							case 'ready': break;
-							case 'e': console.error(e.data.d); break;
-							case XW.msg: 
-								global_wb = to_json(JSON.parse(e.data.d));
-								show_output(global_wb);
-								accountsWorker.postMessage({type: 'set_global_wb', workbook: global_wb});
-								accountsWorker.postMessage({type: 'get_all_accounts'});
-								break;
-						}
-					};
-					excelParsingWorker.postMessage({d:data,b:'binary'});
-					accountsWorker.onmessage = function(e) {
-						switch(e.data.type) {
-							case 'all_accounts':
-								global_accounts_list = e.data.accounts.sort();
-								add_accounts();
-								break;
-							case 'save_excel':
-								saveAs(new Blob([e.data.buffer], {type: "application/octet-stream"}), `${e.data.fileName}.xlsx`);
-								break;
-						}
-					};
-				};
-				reader.readAsBinaryString(file);
-			}
-			(function() {
-				var drop = document.getElementById('drop');
-				if(!drop.addEventListener) return;
-
-				function handleDrop(e) {
-					e.stopPropagation();
-					e.preventDefault();
-					process_journal(e.dataTransfer.files);
-				}
-
-				function handleDragover(e) {
-					e.stopPropagation();
-					e.preventDefault();
-					e.dataTransfer.dropEffect = 'copy';
-				}
-
-				drop.addEventListener('dragenter', handleDragover, false);
-				drop.addEventListener('dragover', handleDragover, false);
-				drop.addEventListener('drop', handleDrop, false);
-			})();
-
-			(function() {
-				let xlf = document.getElementById('xlf');
-				if(!xlf.addEventListener) return;
-				function handleFile(e) { process_journal(e.target.files); }
-				xlf.addEventListener('change', handleFile, false);
-			})();
-
-			(function() {
-				const accountsListSelect = document.getElementById('accounts_list');
-				accountsListSelect.addEventListener('change', function changeHandler() {
-					const accountName = accountsListSelect.value;
-					if (!accountName) {
-						return false;
-					}
-					accountsWorker && accountsWorker.postMessage({type: 'get_account_ledger', accountName});
-				});
-			})();
-
-			(function() {
-				const trialBalanceLink = document.getElementById('trial_balance');
-				trialBalanceLink.addEventListener('click', function clickHandler(e) {
-					e.stopPropagation();
-					e.preventDefault();
-					accountsWorker && accountsWorker.postMessage({type: 'get_trial_balance'});
-				});
-			})();			
-		</script>
+		<script defer src="main.js"></script>
 	</body>
 </html>
