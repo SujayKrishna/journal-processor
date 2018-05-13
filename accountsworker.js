@@ -232,17 +232,22 @@ function getLedgerSheetForSingleAccount(account) {
 	return getLedgerSheet(ledgerEntries, sheetName);
 }
 
+function cleanRow(row) {
+	const cleanedEntries = Object.entries(row).map(([key, value]) => [key.trim(), typeof value == 'string' ? value.trim() : value]);
+	return cleanedEntries.reduce((map, [key, value]) => { map[key] = value; return map;}, {});
+}
+
 onmessage = function (evt) {
 	switch(evt.data.type) {
 		case 'read_excel':
 			const excelWorkbook = XLSX.read(evt.data.data, EXCEL_PARSING_OPTIONS);
 			global_wb = workbook_to_json(excelWorkbook);
-			allRows = global_wb.Sheet1;
+			allRows = global_wb.Sheet1.filter(row => row['DATE']).map(row => cleanRow(row))
 			allRows.sort((row1, row2) => 
 				row1['DATE'] - row2['DATE']
 			);
 			accountShortToFull = global_wb.Sheet2.reduce((map, row) => {
-				map[row[ACCOUNT]] = row[LEDGER_ACCOUNT];
+				map[row[ACCOUNT].trim()] = row[LEDGER_ACCOUNT].trim();
 				return map;
 			});
 			const journalCols = excelWorkbook.Sheets.Sheet1['!cols'];
@@ -271,8 +276,8 @@ onmessage = function (evt) {
 			if (typeof allAccounts == 'undefined') {
 				allAccounts = new Set();
 				allRows.forEach(row => {
-					allAccounts.add(row[DR_ACCOUNT]);
-					allAccounts.add(row[CR_ACCOUNT]);
+					allAccounts.add(row[DR_ACCOUNT].trim());
+					allAccounts.add(row[CR_ACCOUNT].trim());
 				});
 			}
 			postMessage({type: "all_accounts", accounts: [...allAccounts]});
